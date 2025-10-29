@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C4DF4" />
+      <stop offset="100%" stop-color="#5B2ACF" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 简化的药品图标：更加抽象的六边形 -->
+  <path d="M40,15 L60,15 L68,30 L60,45 L40,45 L32,30 Z" fill="url(#purpleGradient)" stroke="none"/>
+  
+  <!-- 简化的AI元素：抽象化的连接点和线条 -->
+  <circle cx="50" cy="30" r="8" fill="white" opacity="0.9"/>
+  <path d="M46,30 L54,30 M50,26 L50,34" stroke="#5B2ACF" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="46" cy="30" r="1.5" fill="#5B2ACF"/>
+  <circle cx="54" cy="30" r="1.5" fill="#5B2ACF"/>
+  <circle cx="50" cy="26" r="1.5" fill="#5B2ACF"/>
+  <circle cx="50" cy="34" r="1.5" fill="#5B2ACF"/>
+  
+  <!-- 简化的文字部分 -->
+  <text x="80" y="35" font-family="'Microsoft YaHei', sans-serif" font-size="18" font-weight="bold" fill="#333333">药品质量管理</text>
+  <text x="80" y="47" font-family="'Microsoft YaHei', sans-serif" font-size="12" fill="#5B2ACF" font-weight="600">AI赋能系统</text>
+</svg> 

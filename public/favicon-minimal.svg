@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C4DF4" />
+      <stop offset="100%" stop-color="#5B2ACF" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 极简化六边形轮廓 -->
+  <path d="M8,8 L24,8 L28,16 L24,24 L8,24 L4,16 Z" stroke="url(#purpleGradient)" stroke-width="1.5" fill="none"/>
+  
+  <!-- 中心点 -->
+  <circle cx="16" cy="16" r="4" fill="url(#purpleGradient)"/>
+</svg> 

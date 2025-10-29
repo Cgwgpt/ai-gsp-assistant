@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C4DF4" />
+      <stop offset="100%" stop-color="#5B2ACF" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 极简化六边形，仅保留轮廓 -->
+  <path d="M35,15 L65,15 L73,30 L65,45 L35,45 L27,30 Z" stroke="url(#purpleGradient)" stroke-width="2" fill="none"/>
+  
+  <!-- 极简AI符号，仅用一个点表示 -->
+  <circle cx="50" cy="30" r="6" fill="url(#purpleGradient)"/>
+  
+  <!-- 简约的文字 -->
+  <text x="85" y="33" font-family="'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#333333">药品质量管理</text>
+  <text x="85" y="45" font-family="'Microsoft YaHei', sans-serif" font-size="10" fill="#5B2ACF" font-weight="600" letter-spacing="0.5">AI赋能系统</text>
+</svg> 

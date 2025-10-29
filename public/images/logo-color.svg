@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C4DF4" />
+      <stop offset="100%" stop-color="#5B2ACF" />
+    </linearGradient>
+    <linearGradient id="neuralGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B6B" />
+      <stop offset="100%" stop-color="#FFD166" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 药品管理图标：六边形代表药物 -->
+  <polygon points="40,10 60,10 70,25 60,40 40,40 30,25" fill="url(#purpleGradient)" stroke="#5B2ACF" stroke-width="2"/>
+  
+  <!-- AI元素：脑回路图案 -->
+  <circle cx="50" cy="25" r="10" fill="white" opacity="0.7"/>
+  <path d="M45,25 Q50,15 55,25" stroke="url(#neuralGradient)" stroke-width="1.5" fill="none"/>
+  <path d="M45,25 Q50,35 55,25" stroke="url(#neuralGradient)" stroke-width="1.5" fill="none"/>
+  <circle cx="45" cy="25" r="1.5" fill="#FF6B6B"/>
+  <circle cx="55" cy="25" r="1.5" fill="#FF6B6B"/>
+  <circle cx="50" cy="20" r="1.5" fill="#FFD166"/>
+  <circle cx="50" cy="30" r="1.5" fill="#FFD166"/>
+  
+  <!-- 文字部分 -->
+  <text x="80" y="27" font-family="'Microsoft YaHei', sans-serif" font-size="16" font-weight="bold" fill="#333333">药品质量管理</text>
+  <text x="80" y="43" font-family="'Microsoft YaHei', sans-serif" font-size="12" fill="#5B2ACF">AI赋能系统</text>
+</svg> 
