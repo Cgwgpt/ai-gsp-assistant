@@ -551,9 +551,13 @@ const chatStore = useChatStore()
 const userStore = useUserStore()
 const { messages, loading, streamingMessage } = storeToRefs(chatStore)
 
-// 接收初始数智人ID参数
+// 接收初始数智人参数
 const props = defineProps({
   initialBotId: {
+    type: String,
+    default: ''
+  },
+  initialBotName: {
     type: String,
     default: ''
   }
@@ -605,28 +609,34 @@ const loadUserAuthorizedBots = async () => {
       
       console.log('转换后的数智人列表:', botList.value)
       
-      // 如果传入了initialBotId，尝试预先选择对应的数智人
-      if (props.initialBotId) {
+      // 如果传入了initial参数，尝试预先选择对应的数智人
+      if (props.initialBotId || props.initialBotName) {
         console.log('尝试预先选择数智人, initialBotId:', props.initialBotId)
         
         // 尝试多种匹配方式
         // 1. 先尝试通过coze_bot_id精确匹配
-        let matchedBot = botList.value.find(b => b.id === props.initialBotId)
+        let matchedBot = props.initialBotId ? botList.value.find(b => b.id === props.initialBotId) : undefined
         
         // 2. 如果没找到，尝试通过数据库ID匹配
-        if (!matchedBot) {
+        if (!matchedBot && props.initialBotId) {
           matchedBot = botList.value.find(b => b.dbId === props.initialBotId)
           console.log('通过dbId尝试匹配数智人')
         }
         
         // 3. 尝试将initialBotId作为字符串匹配coze_bot_id，防止类型不一致
-        if (!matchedBot) {
+        if (!matchedBot && props.initialBotId) {
           matchedBot = botList.value.find(b => String(b.id) === String(props.initialBotId))
           console.log('通过字符串转换尝试匹配coze_bot_id')
         }
         
-        // 4. 尝试部分匹配，防止ID格式略有差异
-        if (!matchedBot && props.initialBotId.length > 5) {
+        // 4. 按名称匹配
+        if (!matchedBot && props.initialBotName) {
+          matchedBot = botList.value.find(b => b.name === props.initialBotName)
+          console.log('通过名称尝试匹配数智人')
+        }
+
+        // 5. 尝试部分匹配，防止ID格式略有差异
+        if (!matchedBot && props.initialBotId && props.initialBotId.length > 5) {
           matchedBot = botList.value.find(b => 
             String(b.id).includes(props.initialBotId) || 
             String(props.initialBotId).includes(b.id)
@@ -1152,8 +1162,8 @@ onMounted(async () => {
   // 设置数智人类型为general
   chatStore.setBotType('general')
   
-  // 设置默认数智人
-  if (botList.value.length > 0) {
+  // 如果未通过路由参数完成预选，则设置默认数智人
+  if (botList.value.length > 0 && !selectedBot.value) {
     selectedBot.value = botList.value[0].id
     
     // 设置chatStore中的数智人信息

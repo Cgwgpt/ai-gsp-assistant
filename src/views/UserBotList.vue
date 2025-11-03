@@ -203,11 +203,10 @@ const useBot = (bot) => {
   // 添加调试输出，检查bot对象结构
   console.log('使用数智人:', bot)
   
-  // 这里应跳转到聊天页面，传递数智人信息
-  // 根据实际项目路由配置进行修改
+  // 跳转到多数智人对话页面，并携带要预选的数智人ID
   router.push({
-    path: '/chat',
-    query: { bot_id: bot.coze_bot_id }
+    path: '/bot-selector',
+    query: { bot_id: bot.coze_bot_id, bot_name: bot.name }
   })
 }
 

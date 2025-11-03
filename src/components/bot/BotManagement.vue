@@ -18,6 +18,49 @@
 
       <!-- Main Content -->
       <div class="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <!-- 页面描述区域 -->
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow-md p-6 mb-6 border border-blue-100">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0">
+              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold text-gray-800 mb-2">数智人管理说明</h3>
+              <p class="text-gray-600 leading-relaxed mb-3">
+                数智人管理页面允许您创建、编辑和管理AI数智人配置。您可以配置多个数智人来满足不同的业务场景需求，每个数智人都可以设置独立的名称、描述、API密钥和类型。
+              </p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                <div class="flex items-start gap-2">
+                  <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-sm text-gray-600">支持通用、GSP专用和专业领域等多种数智人类型</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-sm text-gray-600">配置Coze平台的数智人ID和API密钥即可使用</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-sm text-gray-600">为每个数智人添加详细描述，方便团队成员了解其用途</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-sm text-gray-600">支持编辑和删除操作，灵活管理您的数智人配置</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="bg-white rounded-lg shadow-md p-6">
           <div class="mb-8">
             <div class="flex justify-between items-center mb-4">
@@ -58,6 +101,7 @@
                 <thead>
                   <tr class="bg-gray-100">
                     <th class="py-3 px-4 text-left text-gray-600 font-medium">名称</th>
+                    <th class="py-3 px-4 text-left text-gray-600 font-medium">描述</th>
                     <th class="py-3 px-4 text-left text-gray-600 font-medium">ID</th>
                     <th class="py-3 px-4 text-left text-gray-600 font-medium">API Key</th>
                     <th class="py-3 px-4 text-left text-gray-600 font-medium">类型</th>
@@ -66,7 +110,11 @@
                 </thead>
                 <tbody>
                   <tr v-for="bot in botList" :key="bot.id" class="border-t border-gray-200 hover:bg-gray-50">
-                    <td class="py-3 px-4 text-gray-800">{{ bot.name }}</td>
+                    <td class="py-3 px-4 text-gray-800 font-medium">{{ bot.name }}</td>
+                    <td class="py-3 px-4 text-gray-600 text-sm max-w-xs">
+                      <span v-if="bot.description" class="line-clamp-2">{{ bot.description }}</span>
+                      <span v-else class="text-gray-400 italic">暂无描述</span>
+                    </td>
                     <td class="py-3 px-4 text-gray-600 font-mono text-sm">{{ bot.coze_bot_id }}</td>
                     <td class="py-3 px-4 text-gray-600 font-mono text-sm">
                       <template v-if="bot.api_key">
@@ -103,7 +151,7 @@
                     </td>
                   </tr>
                   <tr v-if="botList.length === 0 && !isLoading">
-                    <td colspan="5" class="py-4 text-center text-gray-500">暂无数智人配置</td>
+                    <td colspan="6" class="py-4 text-center text-gray-500">暂无数智人配置</td>
                   </tr>
                 </tbody>
               </table>
@@ -159,7 +207,7 @@
               <p v-if="validationErrors.key" class="mt-1 text-sm text-red-500">{{ validationErrors.key }}</p>
             </div>
             
-            <div class="mb-6">
+            <div class="mb-4">
               <label class="block text-gray-700 text-sm font-medium mb-2">数智人类型</label>
               <select 
                 v-model="currentBot.type" 
@@ -169,6 +217,17 @@
                 <option value="gsp">GSP专用数智人</option>
                 <option value="specialized">专业领域数智人</option>
               </select>
+            </div>
+            
+            <div class="mb-6">
+              <label class="block text-gray-700 text-sm font-medium mb-2">数智人描述</label>
+              <textarea 
+                v-model="currentBot.description" 
+                rows="4"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="请输入数智人的详细描述，例如：用途、适用场景、功能特点等..."
+              ></textarea>
+              <p class="mt-1 text-sm text-gray-500">建议描述数智人的主要用途和应用场景，方便团队成员理解和使用</p>
             </div>
             
             <div class="flex justify-end gap-3">
@@ -238,7 +297,7 @@ const errorMessage = ref('')
 // 模态框状态
 const showModal = ref(false)
 const isEditing = ref(false)
-const currentBot = ref<Bot>({ coze_bot_id: '', name: '', api_key: '', type: 'general' })
+const currentBot = ref<Bot>({ coze_bot_id: '', name: '', api_key: '', type: 'general', description: '' })
 const showDeleteConfirm = ref(false)
 const botToDelete = ref<Bot | null>(null)
 
@@ -339,7 +398,8 @@ const openAddModal = () => {
     coze_bot_id: '', 
     name: '', 
     api_key: import.meta.env.VITE_COZE_API_KEY || '',
-    type: 'general'
+    type: 'general',
+    description: ''
   }
   showModal.value = true
 }
@@ -457,7 +517,7 @@ const saveBot = async () => {
 // 关闭模态框
 const closeModal = () => {
   showModal.value = false
-  currentBot.value = { coze_bot_id: '', name: '', api_key: '', type: 'general' }
+  currentBot.value = { coze_bot_id: '', name: '', api_key: '', type: 'general', description: '' }
 }
 
 // 确认删除
