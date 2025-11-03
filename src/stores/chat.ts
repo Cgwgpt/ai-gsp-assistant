@@ -162,10 +162,13 @@ export const useChatStore = defineStore('chat', {
           const chunk = decoder.decode(value, {stream: true})
           console.log('收到数据块:', chunk)
           
-          // 检查是否是错误响应
-          if (chunk.includes('"code":') && chunk.includes('"msg":')) {
+          // 检查是否是错误响应（必须是完整的JSON对象，且不包含SSE格式）
+          const trimmedChunk = chunk.trim()
+          // 确保不是SSE格式（不包含event:或data:），且是完整的JSON对象
+          const isSSEFormat = trimmedChunk.includes('event:') || trimmedChunk.includes('data:')
+          if (!isSSEFormat && trimmedChunk.startsWith('{') && trimmedChunk.endsWith('}') && trimmedChunk.includes('"code":') && trimmedChunk.includes('"msg":')) {
             try {
-              const errorObj = JSON.parse(chunk)
+              const errorObj = JSON.parse(trimmedChunk)
               if (errorObj.code && errorObj.msg) {
                 // 处理错误情况
                 console.error('API返回错误:', errorObj)
@@ -260,7 +263,7 @@ export const useChatStore = defineStore('chat', {
                   break
                   
                 case 'conversation.message.delta':
-                  if(eventData.role === 'assistant') {
+                  if(eventData.role === 'assistant' && eventData.content) {
                     this.currentAssistantMessage += eventData.content
                     console.log('更新助手消息:', this.currentAssistantMessage)
                     if(this.streamingMessage) {
@@ -272,6 +275,17 @@ export const useChatStore = defineStore('chat', {
                 case 'conversation.message.completed':
                   console.log('消息完成:', eventData)
                   if(eventData.type === 'answer') {
+                    // 确保流式消息的内容已经正确更新
+                    if(this.streamingMessage) {
+                      // 如果eventData包含content，使用完整的content更新
+                      if(eventData.content && eventData.content !== this.currentAssistantMessage) {
+                        this.streamingMessage.content = eventData.content
+                        this.currentAssistantMessage = eventData.content
+                      } else {
+                        // 否则使用累积的currentAssistantMessage
+                        this.streamingMessage.content = this.currentAssistantMessage
+                      }
+                    }
                     this.streamingMessage = null
                     // 保存对话历史到本地并记录使用量
                     this.saveConversationHistory()
@@ -505,6 +519,10 @@ export const useGspChatStore = defineStore('gspChat', {
         const botId = import.meta.env.VITE_GSP_BOT_ID || import.meta.env.VITE_COZE_BOT_ID
         const apiKey = import.meta.env.VITE_COZE_API_KEY
         
+        // 设置当前数智人ID，以便记录使用量时能找到数智人
+        this.currentBotId = botId || ''
+        this.currentApiKey = apiKey || ''
+        
         const stream = await chatService.sendMessage(content, this.conversationId, botId, apiKey, this.botType)
         if (!stream) throw new Error('获取响应流失败')
 
@@ -517,10 +535,13 @@ export const useGspChatStore = defineStore('gspChat', {
           
           const chunk = decoder.decode(value, {stream: true})
           
-          // 检查是否是错误响应
-          if (chunk.includes('"code":') && chunk.includes('"msg":')) {
+          // 检查是否是错误响应（必须是完整的JSON对象，且不包含SSE格式）
+          const trimmedChunk = chunk.trim()
+          // 确保不是SSE格式（不包含event:或data:），且是完整的JSON对象
+          const isSSEFormat = trimmedChunk.includes('event:') || trimmedChunk.includes('data:')
+          if (!isSSEFormat && trimmedChunk.startsWith('{') && trimmedChunk.endsWith('}') && trimmedChunk.includes('"code":') && trimmedChunk.includes('"msg":')) {
             try {
-              const errorObj = JSON.parse(chunk)
+              const errorObj = JSON.parse(trimmedChunk)
               if (errorObj.code && errorObj.msg) {
                 // 处理错误情况
                 console.error('API返回错误:', errorObj)
@@ -589,7 +610,7 @@ export const useGspChatStore = defineStore('gspChat', {
                   break
                   
                 case 'conversation.message.delta':
-                  if(eventData.role === 'assistant') {
+                  if(eventData.role === 'assistant' && eventData.content) {
                     this.currentAssistantMessage += eventData.content
                     console.log('更新助手消息:', this.currentAssistantMessage)
                     if(this.streamingMessage) {
@@ -601,6 +622,17 @@ export const useGspChatStore = defineStore('gspChat', {
                 case 'conversation.message.completed':
                   console.log('消息完成:', eventData)
                   if(eventData.type === 'answer') {
+                    // 确保流式消息的内容已经正确更新
+                    if(this.streamingMessage) {
+                      // 如果eventData包含content，使用完整的content更新
+                      if(eventData.content && eventData.content !== this.currentAssistantMessage) {
+                        this.streamingMessage.content = eventData.content
+                        this.currentAssistantMessage = eventData.content
+                      } else {
+                        // 否则使用累积的currentAssistantMessage
+                        this.streamingMessage.content = this.currentAssistantMessage
+                      }
+                    }
                     this.streamingMessage = null
                     // 保存对话历史到本地并记录使用量
                     this.saveConversationHistory()

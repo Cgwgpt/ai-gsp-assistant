@@ -79,12 +79,12 @@
                   ]">
                     <div class="flex justify-between text-sm text-gray-500 mb-1 pr-20">
                       <span>{{ msg.role === 'user' ? '用户' : '数智人' }}</span>
-                      <span>{{ msg.timestamp }}</span>
+                      <span class="timestamp">{{ msg.timestamp }}</span>
                     </div>
                     <div v-if="msg.role === 'user'" class="whitespace-pre-wrap">
                       {{ msg.content }}
                     </div>
-                    <div v-else class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
+                    <div v-else class="markdown-body" v-html="renderMessageContent(msg.content)"></div>
                     <span v-if="msg === streamingMessage" 
                           class="cursor">|</span>
                     
@@ -204,6 +204,37 @@
                   调试
                 </button>
               </div>
+              
+              <!-- Prompt Selector -->
+              <div class="mt-3 pt-3 border-t border-gray-200">
+                <div class="flex gap-2 items-center">
+                  <label class="text-sm text-gray-600 font-medium whitespace-nowrap">预设提示词：</label>
+                  <select 
+                    class="flex-1 border rounded-lg px-3 py-2 bg-white focus:ring-2 
+                           focus:ring-blue-500 focus:border-transparent outline-none
+                           text-sm text-gray-600 cursor-pointer"
+                    v-model="selectedPromptId"
+                    @change="handlePromptSelect"
+                  >
+                    <option value="">请选择提示词...</option>
+                    <option v-for="prompt in prompts" :key="prompt.id" :value="prompt.id">
+                      {{ prompt.title }}
+                    </option>
+                  </select>
+                  <button 
+                    class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
+                           transition-colors flex items-center gap-1 text-sm"
+                    @click="showPromptDialog = true"
+                    title="管理提示词"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M12 4v16m8-8H4"/>
+                    </svg>
+                    管理
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -242,6 +273,142 @@
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 提示词管理对话框 -->
+      <div v-if="showPromptDialog" 
+           class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+           @click="showPromptDialog = false">
+        <div class="bg-white rounded-lg w-[700px] max-h-[80vh] flex flex-col" 
+             @click.stop>
+          <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="text-lg font-medium">提示词管理</h3>
+            <button class="text-gray-500 hover:text-gray-700" @click="showPromptDialog = false">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div class="p-6 overflow-y-auto flex-1">
+            <!-- 添加/编辑提示词表单 -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 class="text-sm font-medium mb-3 text-gray-700">
+                {{ editingPrompt ? '编辑提示词' : '添加新提示词' }}
+              </h4>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-sm text-gray-600 mb-1">标题</label>
+                  <input 
+                    type="text"
+                    v-model="promptForm.title"
+                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 
+                           focus:border-transparent outline-none text-sm"
+                    placeholder="输入提示词标题"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm text-gray-600 mb-1">内容</label>
+                  <textarea 
+                    v-model="promptForm.content"
+                    rows="4"
+                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 
+                           focus:border-transparent outline-none text-sm"
+                    placeholder="输入提示词内容"
+                  ></textarea>
+                </div>
+                <div class="flex items-center gap-4">
+                  <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input 
+                      type="checkbox"
+                      v-model="promptForm.is_public"
+                      class="rounded"
+                    />
+                    <span>设为公开（所有用户可见）</span>
+                  </label>
+                </div>
+                <div class="flex gap-2">
+                  <button 
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
+                           transition-colors text-sm"
+                    @click="savePrompt"
+                    :disabled="!promptForm.title || !promptForm.content"
+                  >
+                    {{ editingPrompt ? '保存' : '添加' }}
+                  </button>
+                  <button 
+                    v-if="editingPrompt"
+                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 
+                           transition-colors text-sm"
+                    @click="cancelEditPrompt"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 提示词列表 -->
+            <div>
+              <h4 class="text-sm font-medium mb-3 text-gray-700">提示词列表</h4>
+              <div class="space-y-2">
+                <div 
+                  v-for="prompt in prompts" 
+                  :key="prompt.id"
+                  class="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <h5 class="font-medium text-sm text-gray-800">{{ prompt.title }}</h5>
+                        <span v-if="prompt.is_public" 
+                              class="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">
+                          公开
+                        </span>
+                      </div>
+                      <p class="text-sm text-gray-600 line-clamp-2">{{ prompt.content }}</p>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                      <button 
+                        class="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                        @click="editPrompt(prompt)"
+                        title="编辑"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                      </button>
+                      <button 
+                        class="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                        @click="deletePrompt(prompt.id!)"
+                        title="删除"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                      </button>
+                      <button 
+                        class="p-1.5 text-green-500 hover:bg-green-50 rounded transition-colors"
+                        @click="usePrompt(prompt)"
+                        title="使用此提示词"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="prompts.length === 0" class="text-center py-8 text-gray-400 text-sm">
+                  暂无提示词，点击上方"添加新提示词"创建第一个提示词
+                </div>
               </div>
             </div>
           </div>
@@ -295,7 +462,7 @@
                   </svg>
                 </button>
               </div>
-              <div class="bg-blue-50 rounded-lg p-4 markdown-body" v-html="renderMarkdown(selectedChat?.response || '')"></div>
+              <div class="bg-blue-50 rounded-lg p-4 markdown-body" v-html="renderMessageContent(selectedChat?.response || '')"></div>
             </div>
           </div>
           
@@ -326,8 +493,9 @@ import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import TheNavbar from '../TheNavbar.vue'
 import { botService } from '../../../services/botService'
+import { promptService } from '../../../services/promptService'
 import { useSupabase } from '../../../composables/useSupabase'
-import { renderMarkdown } from '../../composables/useMarkdown'
+import { renderMessageContent } from '../../composables/useMarkdown'
 import { useSpeech } from '../../composables/useSpeech'
 import '../../assets/markdown.css'
 import '../../assets/highlight.css'
@@ -396,6 +564,17 @@ const isAdmin = computed(() => userStore.isAdmin())
 
 const inputMessage = ref('')
 const selectedBot = ref('')
+
+// 提示词相关
+const prompts = ref<any[]>([])
+const selectedPromptId = ref('')
+const showPromptDialog = ref(false)
+const editingPrompt = ref<any>(null)
+const promptForm = ref({
+  title: '',
+  content: '',
+  is_public: false
+})
 
 // 数智人列表
 const botList = ref<Bot[]>([
@@ -673,7 +852,7 @@ const handleNewChat = () => {
   inputMessage.value = ''
 }
 
-const handleBotChange = () => {
+const handleBotChange = async () => {
   chatStore.reset()
   
   // 获取当前选中数智人的API Key
@@ -710,6 +889,10 @@ const handleBotChange = () => {
         chatStore.setBot(bot.id, bot.apiKey, bot.type)
       })
   }
+  
+  // 加载新数智人的提示词
+  await loadPrompts()
+  selectedPromptId.value = '' // 清除提示词选择
   
   // 尝试恢复该数智人的最近一次对话
   const botHistory = getBotChatHistory(selectedBot.value)
@@ -806,10 +989,165 @@ watch(() => streamingMessage.value?.content, (newContent) => {
   console.log('流式消息内容更新:', newContent)
 }, { immediate: true })
 
+// 加载提示词列表
+const loadPrompts = async () => {
+  try {
+    // 获取当前选中数智人的数据库ID
+    const bot = botList.value.find((b: Bot) => b.id === selectedBot.value)
+    let botDbId = null
+    
+    if (bot && bot.dbId) {
+      botDbId = bot.dbId
+    } else if (bot) {
+      // 如果没有dbId，尝试从Supabase获取
+      const { data: botData } = await botService.getBot(selectedBot.value)
+      if (botData && botData.id) {
+        botDbId = botData.id
+      }
+    }
+    
+    const { data, error } = await promptService.getPrompts(botDbId || undefined, true)
+    
+    if (error) {
+      console.error('加载提示词列表失败:', error)
+      return
+    }
+    
+    prompts.value = data || []
+  } catch (error) {
+    console.error('加载提示词列表出错:', error)
+  }
+}
+
+// 选择提示词
+const handlePromptSelect = () => {
+  if (!selectedPromptId.value) return
+  
+  const prompt = prompts.value.find(p => p.id === selectedPromptId.value)
+  if (prompt) {
+    inputMessage.value = prompt.content
+  }
+}
+
+// 使用提示词
+const usePrompt = (prompt: any) => {
+  inputMessage.value = prompt.content
+  selectedPromptId.value = prompt.id || ''
+  showPromptDialog.value = false
+}
+
+// 编辑提示词
+const editPrompt = (prompt: any) => {
+  editingPrompt.value = prompt
+  promptForm.value = {
+    title: prompt.title,
+    content: prompt.content,
+    is_public: prompt.is_public || false
+  }
+}
+
+// 取消编辑
+const cancelEditPrompt = () => {
+  editingPrompt.value = null
+  promptForm.value = {
+    title: '',
+    content: '',
+    is_public: false
+  }
+}
+
+// 保存提示词
+const savePrompt = async () => {
+  if (!promptForm.value.title || !promptForm.value.content) {
+    alert('请填写标题和内容')
+    return
+  }
+  
+  try {
+    // 获取当前选中数智人的数据库ID
+    const bot = botList.value.find((b: Bot) => b.id === selectedBot.value)
+    let botDbId = null
+    
+    if (bot && bot.dbId) {
+      botDbId = bot.dbId
+    } else if (bot) {
+      // 如果没有dbId，尝试从Supabase获取
+      const { data: botData } = await botService.getBot(selectedBot.value)
+      if (botData && botData.id) {
+        botDbId = botData.id
+      }
+    }
+    
+    if (editingPrompt.value) {
+      // 更新提示词
+      const { error } = await promptService.updatePrompt(editingPrompt.value.id, {
+        title: promptForm.value.title,
+        content: promptForm.value.content,
+        bot_id: botDbId || undefined,
+        is_public: promptForm.value.is_public
+      })
+      
+      if (error) {
+        alert('更新提示词失败: ' + (error.message || '未知错误'))
+        return
+      }
+    } else {
+      // 创建新提示词
+      const { error } = await promptService.createPrompt({
+        title: promptForm.value.title,
+        content: promptForm.value.content,
+        bot_id: botDbId || undefined,
+        is_public: promptForm.value.is_public
+      })
+      
+      if (error) {
+        alert('创建提示词失败: ' + (error.message || '未知错误'))
+        return
+      }
+    }
+    
+    // 重新加载提示词列表
+    await loadPrompts()
+    
+    // 重置表单
+    cancelEditPrompt()
+  } catch (error: any) {
+    console.error('保存提示词失败:', error)
+    alert('保存提示词失败: ' + (error.message || '未知错误'))
+  }
+}
+
+// 删除提示词
+const deletePrompt = async (id: string) => {
+  if (!confirm('确定要删除这条提示词吗？')) {
+    return
+  }
+  
+  try {
+    const { error } = await promptService.deletePrompt(id)
+    
+    if (error) {
+      alert('删除提示词失败: ' + (error.message || '未知错误'))
+      return
+    }
+    
+    // 重新加载提示词列表
+    await loadPrompts()
+    
+    // 如果删除的是当前选中的提示词，清除选择
+    if (selectedPromptId.value === id) {
+      selectedPromptId.value = ''
+    }
+  } catch (error: any) {
+    console.error('删除提示词失败:', error)
+    alert('删除提示词失败: ' + (error.message || '未知错误'))
+  }
+}
+
 // 在组件挂载时加载历史记录和设置默认数智人
-onMounted(() => {
+onMounted(async () => {
   loadLocalChatHistory()
-  loadUserAuthorizedBots() // 加载用户授权的数智人
+  await loadUserAuthorizedBots() // 加载用户授权的数智人
   
   // 设置数智人类型为general
   chatStore.setBotType('general')
@@ -823,6 +1161,9 @@ onMounted(() => {
     chatStore.currentBotId = bot.id
     chatStore.currentApiKey = bot.apiKey
     
+    // 加载该数智人的提示词
+    await loadPrompts()
+    
     // 显示该数智人的历史记录
     const botHistory = getBotChatHistory(selectedBot.value)
     if (botHistory.length > 0) {
@@ -831,6 +1172,12 @@ onMounted(() => {
     }
   }
 })
+
+// 监听数智人变化，加载对应的提示词
+watch(() => selectedBot.value, async () => {
+  await loadPrompts()
+  selectedPromptId.value = '' // 清除提示词选择
+}, { immediate: false })
 
 // 添加对话框相关的状态和方法
 const showDialog = ref(false)
@@ -1100,5 +1447,115 @@ header {
   background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%);
   box-shadow: 0 4px 15px rgba(59, 130, 246, 0.15);
   backdrop-filter: blur(10px);
+}
+
+/* 时间戳样式 */
+.timestamp {
+  font-size: 0.75rem;
+  color: rgba(107, 114, 128, 1);
+}
+
+/* Markdown内容区域样式优化 */
+.markdown-body {
+  word-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.markdown-body :deep(h1) {
+  font-size: 1.5rem;
+  border-bottom: 1px solid rgba(229, 231, 235, 1);
+  padding-bottom: 0.5rem;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 1.25rem;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 1.125rem;
+}
+
+.markdown-body :deep(p) {
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.markdown-body :deep(li) {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-body :deep(code) {
+  background-color: rgba(243, 244, 246, 1);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+.markdown-body :deep(pre) {
+  background-color: rgba(243, 244, 246, 1);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body :deep(pre code) {
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 4px solid rgba(59, 130, 246, 1);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: rgba(107, 114, 128, 1);
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body :deep(a) {
+  color: rgba(59, 130, 246, 1);
+  text-decoration: underline;
+}
+
+.markdown-body :deep(a:hover) {
+  color: rgba(37, 99, 235, 1);
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid rgba(229, 231, 235, 1);
+  margin: 1rem 0;
+}
+
+.markdown-body :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid rgba(229, 231, 235, 1);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background-color: rgba(249, 250, 251, 1);
+  font-weight: 600;
 }
 </style> 

@@ -127,10 +127,13 @@ export const useChatStore = defineStore('chat', {
           
           const chunk = decoder.decode(value, {stream: true})
           
-          // 检查是否是错误响应
-          if (chunk.includes('"code":') && chunk.includes('"msg":')) {
+          // 检查是否是错误响应（必须是完整的JSON对象，且不包含SSE格式）
+          const trimmedChunk = chunk.trim()
+          // 确保不是SSE格式（不包含event:或data:），且是完整的JSON对象
+          const isSSEFormat = trimmedChunk.includes('event:') || trimmedChunk.includes('data:')
+          if (!isSSEFormat && trimmedChunk.startsWith('{') && trimmedChunk.endsWith('}') && trimmedChunk.includes('"code":') && trimmedChunk.includes('"msg":')) {
             try {
-              const errorObj = JSON.parse(chunk)
+              const errorObj = JSON.parse(trimmedChunk)
               if (errorObj.code && errorObj.msg) {
                 // 处理错误情况
                 console.error('API返回错误:', errorObj)
@@ -159,25 +162,62 @@ export const useChatStore = defineStore('chat', {
                 return null
               }
             } catch (e) {
-              console.error('解析错误响应失败:', e)
+              // 如果不是完整的JSON错误响应，继续处理为SSE事件
+              console.warn('解析错误响应失败，继续作为SSE事件处理:', e)
             }
           }
           
+          // 解析SSE事件格式
           const events = chunk.split('\n\n')
           
           for(const event of events) {
-            if(!event) continue
+            if(!event || !event.trim()) continue
             
-            const lines = event.split('\n')
-            if(lines.length < 2) continue
+            const lines = event.split('\n').filter(line => line.trim())
+            if(lines.length < 1) continue
             
-            const eventType = lines[0].replace('event:', '')
-            const dataLine = lines[1]
+            // 查找event行和data行
+            let eventType = ''
+            let dataLine = ''
             
-            if(!eventType || !dataLine.startsWith('data:')) continue
+            for(const line of lines) {
+              if(line.startsWith('event:')) {
+                eventType = line.replace('event:', '').trim()
+              } else if(line.startsWith('data:')) {
+                dataLine = line.replace('data:', '').trim()
+              }
+            }
+            
+            // 处理done事件（可能是[done]格式）
+            if(eventType === 'done' || event.trim() === '[DONE]' || event.trim().startsWith('[DONE]')) {
+              console.log('解析事件: done [DONE]')
+              this.loading = false
+              if(this.streamingMessage) {
+                this.streamingMessage = null
+                this.saveConversationHistory()
+              }
+              break
+            }
+            
+            // 如果缺少eventType或dataLine，跳过
+            if(!eventType || !dataLine) {
+              // 如果不是以event:开头的数据块，可能是其他格式，跳过
+              if(!event.trim().startsWith('event:') && !event.trim().startsWith('data:')) {
+                continue
+              }
+            }
 
             try {
-              const eventData = JSON.parse(dataLine.replace('data:', ''))
+              // 尝试解析JSON数据
+              let eventData
+              try {
+                eventData = JSON.parse(dataLine)
+              } catch (parseError) {
+                // 如果解析失败，可能是非JSON格式的数据，记录并跳过
+                console.warn('无法解析事件数据为JSON:', eventType, dataLine, parseError)
+                continue
+              }
+              
               console.log('解析事件:', eventType, eventData)
               
               switch(eventType) {
@@ -186,8 +226,15 @@ export const useChatStore = defineStore('chat', {
                   console.log('对话ID:', this.conversationId)
                   break
                   
+                case 'conversation.chat.completed':
+                  console.log('对话完成:', eventData)
+                  if(eventData.conversation_id) {
+                    this.conversationId = eventData.conversation_id
+                  }
+                  break
+                  
                 case 'conversation.message.delta':
-                  if(eventData.role === 'assistant') {
+                  if(eventData.role === 'assistant' && eventData.content) {
                     this.currentAssistantMessage += eventData.content
                     console.log('更新助手消息:', this.currentAssistantMessage)
                     if(this.streamingMessage) {
@@ -199,6 +246,17 @@ export const useChatStore = defineStore('chat', {
                 case 'conversation.message.completed':
                   console.log('消息完成:', eventData)
                   if(eventData.type === 'answer') {
+                    // 确保流式消息的内容已经正确更新
+                    if(this.streamingMessage) {
+                      // 如果eventData包含content，使用完整的content更新
+                      if(eventData.content && eventData.content !== this.currentAssistantMessage) {
+                        this.streamingMessage.content = eventData.content
+                        this.currentAssistantMessage = eventData.content
+                      } else {
+                        // 否则使用累积的currentAssistantMessage
+                        this.streamingMessage.content = this.currentAssistantMessage
+                      }
+                    }
                     this.streamingMessage = null
                     // 保存对话历史
                     this.saveConversationHistory()
@@ -206,7 +264,8 @@ export const useChatStore = defineStore('chat', {
                   break
               }
             } catch (e) {
-              console.error('解析事件数据失败:', e, dataLine)
+              // 记录解析错误，但不中断流程
+              console.warn('解析事件数据失败:', eventType, dataLine, e)
             }
           }
         }
@@ -416,10 +475,13 @@ export const useGspChatStore = defineStore('gspChat', {
           
           const chunk = decoder.decode(value, {stream: true})
           
-          // 检查是否是错误响应
-          if (chunk.includes('"code":') && chunk.includes('"msg":')) {
+          // 检查是否是错误响应（必须是完整的JSON对象，且不包含SSE格式）
+          const trimmedChunk = chunk.trim()
+          // 确保不是SSE格式（不包含event:或data:），且是完整的JSON对象
+          const isSSEFormat = trimmedChunk.includes('event:') || trimmedChunk.includes('data:')
+          if (!isSSEFormat && trimmedChunk.startsWith('{') && trimmedChunk.endsWith('}') && trimmedChunk.includes('"code":') && trimmedChunk.includes('"msg":')) {
             try {
-              const errorObj = JSON.parse(chunk)
+              const errorObj = JSON.parse(trimmedChunk)
               if (errorObj.code && errorObj.msg) {
                 // 处理错误情况
                 console.error('API返回错误:', errorObj)
@@ -451,25 +513,61 @@ export const useGspChatStore = defineStore('gspChat', {
                 return null
               }
             } catch (e) {
-              console.error('解析错误响应失败:', e)
+              // 如果不是完整的JSON错误响应，继续处理为SSE事件
+              console.warn('解析错误响应失败，继续作为SSE事件处理:', e)
             }
           }
           
+          // 解析SSE事件格式
           const events = chunk.split('\n\n')
           
           for(const event of events) {
-            if(!event) continue
+            if(!event || !event.trim()) continue
             
-            const lines = event.split('\n')
-            if(lines.length < 2) continue
+            const lines = event.split('\n').filter(line => line.trim())
+            if(lines.length < 1) continue
             
-            const eventType = lines[0].replace('event:', '')
-            const dataLine = lines[1]
+            // 查找event行和data行
+            let eventType = ''
+            let dataLine = ''
             
-            if(!eventType || !dataLine.startsWith('data:')) continue
+            for(const line of lines) {
+              if(line.startsWith('event:')) {
+                eventType = line.replace('event:', '').trim()
+              } else if(line.startsWith('data:')) {
+                dataLine = line.replace('data:', '').trim()
+              }
+            }
+            
+            // 处理done事件（可能是[done]格式）
+            if(eventType === 'done' || event.trim() === '[DONE]' || event.trim().startsWith('[DONE]')) {
+              console.log('解析事件: done [DONE]')
+              this.loading = false
+              if(this.streamingMessage) {
+                this.streamingMessage = null
+              }
+              break
+            }
+            
+            // 如果缺少eventType或dataLine，跳过
+            if(!eventType || !dataLine) {
+              // 如果不是以event:开头的数据块，可能是其他格式，跳过
+              if(!event.trim().startsWith('event:') && !event.trim().startsWith('data:')) {
+                continue
+              }
+            }
 
             try {
-              const eventData = JSON.parse(dataLine.replace('data:', ''))
+              // 尝试解析JSON数据
+              let eventData
+              try {
+                eventData = JSON.parse(dataLine)
+              } catch (parseError) {
+                // 如果解析失败，可能是非JSON格式的数据，记录并跳过
+                console.warn('无法解析事件数据为JSON:', eventType, dataLine, parseError)
+                continue
+              }
+              
               console.log('解析事件:', eventType, eventData)
               
               switch(eventType) {
@@ -478,8 +576,15 @@ export const useGspChatStore = defineStore('gspChat', {
                   console.log('对话ID:', this.conversationId)
                   break
                   
+                case 'conversation.chat.completed':
+                  console.log('对话完成:', eventData)
+                  if(eventData.conversation_id) {
+                    this.conversationId = eventData.conversation_id
+                  }
+                  break
+                  
                 case 'conversation.message.delta':
-                  if(eventData.role === 'assistant') {
+                  if(eventData.role === 'assistant' && eventData.content) {
                     this.currentAssistantMessage += eventData.content
                     console.log('更新助手消息:', this.currentAssistantMessage)
                     if(this.streamingMessage) {
@@ -491,13 +596,25 @@ export const useGspChatStore = defineStore('gspChat', {
                 case 'conversation.message.completed':
                   console.log('消息完成:', eventData)
                   if(eventData.type === 'answer') {
+                    // 确保流式消息的内容已经正确更新
+                    if(this.streamingMessage) {
+                      // 如果eventData包含content，使用完整的content更新
+                      if(eventData.content && eventData.content !== this.currentAssistantMessage) {
+                        this.streamingMessage.content = eventData.content
+                        this.currentAssistantMessage = eventData.content
+                      } else {
+                        // 否则使用累积的currentAssistantMessage
+                        this.streamingMessage.content = this.currentAssistantMessage
+                      }
+                    }
                     this.streamingMessage = null
                     // 不需要保存GSP对话历史
                   }
                   break
               }
             } catch (e) {
-              console.error('解析事件数据失败:', e, dataLine)
+              // 记录解析错误，但不中断流程
+              console.warn('解析事件数据失败:', eventType, dataLine, e)
             }
           }
         }

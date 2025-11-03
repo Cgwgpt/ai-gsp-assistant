@@ -62,7 +62,7 @@
                         <span class="timestamp">智能撰写</span>
                         <span class="timestamp">{{ msg.timestamp }}</span>
                       </div>
-                      <div class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
+                      <div class="markdown-body" v-html="renderMessageContent(msg.content)"></div>
                       <span v-if="msg === streamingMessage" 
                             class="cursor">|</span>
                       
@@ -271,7 +271,7 @@
                   </svg>
                 </button>
               </div>
-              <div class="bg-blue-50 rounded-lg p-4 markdown-body" v-html="renderMarkdown(selectedChat?.response || '')"></div>
+              <div class="bg-blue-50 rounded-lg p-4 markdown-body" v-html="renderMessageContent(selectedChat?.response || '')"></div>
             </div>
           </div>
           
@@ -300,7 +300,7 @@ import { useGspChatStore } from '@/stores/chat'
 import { storeToRefs } from 'pinia'
 import TheNavbar from '../TheNavbar.vue'
 import { useSupabase } from '../../../composables/useSupabase'
-import { renderMarkdown } from '../../composables/useMarkdown'
+import { renderMessageContent } from '../../composables/useMarkdown'
 import { useSpeech } from '../../composables/useSpeech'
 import '../../assets/markdown.css'
 import '../../assets/highlight.css'

@@ -68,6 +68,8 @@
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'vue-router'
+import { usageService } from '~/services/usageService'
+import { authorizationService } from '~/services/authorizationService'
 
 const router = useRouter()
 const form = ref({
@@ -95,10 +97,64 @@ const handleRegister = async () => {
 
     if (error) throw error
 
+    // 如果注册成功且有用户ID，初始化用户配额和授权
+    if (data?.user?.id) {
+      const userId = data.user.id
+      
+      try {
+        // 1. 创建默认配额记录（对话次数限制5次，Token无限制）
+        const quotaResult = await usageService.setUserQuota({
+          user_id: userId,
+          bot_id: null, // 全局配额
+          max_conversations: 5, // 对话次数限制5次
+          max_tokens: -1 // Token无限制
+        })
+        
+        if (quotaResult.error) {
+          console.error('创建用户配额失败:', quotaResult.error)
+        } else {
+          console.log('成功创建用户默认配额，对话次数限制5次')
+        }
+        
+        // 2. 获取所有数智人并授权给新用户
+        const { data: allBots, error: botsError } = await supabase
+          .from('bots')
+          .select('id')
+        
+        if (botsError) {
+          console.error('获取数智人列表失败:', botsError)
+        } else if (allBots && allBots.length > 0) {
+          // 批量授权所有数智人给新用户
+          const authPromises = allBots.map(bot => 
+            authorizationService.authorizeUserBot(userId, bot.id)
+          )
+          
+          const authResults = await Promise.allSettled(authPromises)
+          
+          // 统计授权结果
+          const successCount = authResults.filter(r => r.status === 'fulfilled').length
+          const failCount = authResults.filter(r => r.status === 'rejected').length
+          
+          console.log(`数智人授权完成: 成功 ${successCount} 个，失败 ${failCount} 个`)
+          
+          if (failCount > 0) {
+            console.warn('部分数智人授权失败，但注册已成功')
+          }
+        } else {
+          console.log('当前没有数智人，跳过授权步骤')
+        }
+      } catch (initError) {
+        // 初始化配额和授权失败不应该阻止注册流程
+        console.error('初始化用户配额或授权时出错:', initError)
+        console.log('用户注册成功，但配额和授权初始化可能未完成')
+      }
+    }
+
     // 注册成功后跳转到登录页
     router.push('/auth/login')
   } catch (error) {
     console.error('注册错误:', error.message)
+    alert('注册失败: ' + error.message)
   }
 }
 </script> 
