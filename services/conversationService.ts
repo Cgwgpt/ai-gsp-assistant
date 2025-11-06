@@ -93,18 +93,8 @@ export const conversationService = {
     try {
       console.log(`创建本地对话: 用户=${user.value.id}, 数智人=${botId}, 标题=${title}`)
       
-      // 检查用户是否超出对话配额
-      const { allowed, error: quotaError } = await usageService.checkConversationQuota(user.value.id, botId)
-      
-      if (quotaError) {
-        console.error('检查用户对话配额失败:', quotaError)
-        // 继续执行，但记录错误
-      } else if (!allowed) {
-        return { 
-          data: null, 
-          error: new Error('您已达到本月对话次数限制，请联系管理员增加配额或等待下个月重置') 
-        }
-      }
+      // 注意：配额检查和记录已在 sendMessageWithBot 中完成（原子操作）
+      // 这里直接创建对话对象，不再重复检查和记录
       
       // 创建本地对话对象
       const conversationData = {
@@ -116,20 +106,6 @@ export const conversationService = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         messages: []
-      }
-      
-      // 记录对话使用量统计
-      try {
-        const { success, error: usageError } = await usageService.recordConversationUsage(user.value.id, botId)
-        if (usageError) {
-          console.error('记录对话使用量失败:', usageError)
-        } else if (!success) {
-          console.warn('记录对话使用量可能未完成')
-        } else {
-          console.log('对话使用量记录成功')
-        }
-      } catch (usageErr) {
-        console.error('记录对话使用量异常:', usageErr)
       }
       
       return { data: conversationData, error: null }

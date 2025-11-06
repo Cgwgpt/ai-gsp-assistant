@@ -42,10 +42,6 @@
             >
               我的数智人
             </router-link>
-            <router-link 
-              to="/ai-demo" 
-              :class="linkClass"
-            >撰写报告</router-link>
             <router-link to="/gsp" :class="linkClass">条款速查</router-link>
             <router-link to="/features" :class="linkClass">检查原则</router-link>
             <router-link to="/blog" :class="linkClass">常见缺陷</router-link>
@@ -57,10 +53,6 @@
           
           <!-- 未登录时显示登录提示 -->
           <template v-else>
-            <a 
-              @click="showLoginMessage" 
-              :class="[linkClass, 'cursor-pointer']"
-            >撰写报告</a>
             <a 
               @click="showLoginMessage" 
               :class="[linkClass, 'cursor-pointer']"
@@ -288,11 +280,6 @@
                 我的数智人
               </router-link>
               <router-link 
-                to="/ai-demo" 
-                :class="[mobileLinkClass, 'block px-3 py-2 rounded-md text-base']"
-                @click="closeMenu"
-              >撰写报告</router-link>
-              <router-link 
                 to="/gsp" 
                 :class="[mobileLinkClass, 'block px-3 py-2 rounded-md text-base']"
                 @click="closeMenu"
@@ -316,10 +303,6 @@
             
             <!-- 未登录时显示登录提示 -->
             <template v-else>
-              <a 
-                @click="showLoginMessage" 
-                :class="[mobileLinkClass, 'block px-3 py-2 rounded-md text-base cursor-pointer']"
-              >撰写报告</a>
               <a 
                 @click="showLoginMessage" 
                 :class="[mobileLinkClass, 'block px-3 py-2 rounded-md text-base cursor-pointer']"

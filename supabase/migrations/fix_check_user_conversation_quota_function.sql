@@ -1,76 +1,5 @@
--- 创建用户用量配额表
-CREATE TABLE IF NOT EXISTS user_quotas (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  bot_id UUID REFERENCES bots(id) ON DELETE CASCADE,
-  max_conversations INTEGER DEFAULT -1, -- -1 表示无限制
-  max_tokens INTEGER DEFAULT -1, -- -1 表示无限制
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  -- 确保一个用户对一个数智人只有一个配额记录，如果bot_id为null则表示全局配额
-  UNIQUE(user_id, bot_id)
-);
-
--- 创建索引
-CREATE INDEX IF NOT EXISTS idx_user_quotas_user_id ON user_quotas(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_quotas_bot_id ON user_quotas(bot_id);
-
--- 创建用量统计表
-CREATE TABLE IF NOT EXISTS usage_metrics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  bot_id UUID REFERENCES bots(id) ON DELETE CASCADE,
-  conversation_count INTEGER DEFAULT 0,
-  token_count INTEGER DEFAULT 0,
-  period_start DATE NOT NULL, -- 统计周期开始日期
-  period_end DATE NOT NULL, -- 统计周期结束日期
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  -- 确保用户在特定周期内对特定数智人只有一条记录
-  UNIQUE(user_id, bot_id, period_start, period_end)
-);
-
--- 创建索引
-CREATE INDEX IF NOT EXISTS idx_usage_metrics_user_id ON usage_metrics(user_id);
-CREATE INDEX IF NOT EXISTS idx_usage_metrics_bot_id ON usage_metrics(bot_id);
-CREATE INDEX IF NOT EXISTS idx_usage_metrics_period ON usage_metrics(period_start, period_end);
-
--- 启用RLS
-ALTER TABLE user_quotas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usage_metrics ENABLE ROW LEVEL SECURITY;
-
--- 删除已存在的策略（如果存在），然后重新创建
--- 管理员可以管理所有配额和查看所有用量统计
-DROP POLICY IF EXISTS "管理员可以管理所有配额" ON user_quotas;
-CREATE POLICY "管理员可以管理所有配额" ON user_quotas
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE id = auth.uid() AND role = 'admin'
-    )
-  );
-
-DROP POLICY IF EXISTS "管理员可以查看所有用量统计" ON usage_metrics;
-CREATE POLICY "管理员可以查看所有用量统计" ON usage_metrics
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE id = auth.uid() AND role = 'admin'
-    )
-  );
-
--- 用户可以查看自己的配额
-DROP POLICY IF EXISTS "用户可以查看自己的配额" ON user_quotas;
-CREATE POLICY "用户可以查看自己的配额" ON user_quotas
-  FOR SELECT USING (user_id = auth.uid());
-
--- 用户可以查看自己的用量统计
-DROP POLICY IF EXISTS "用户可以查看自己的用量统计" ON usage_metrics;
-CREATE POLICY "用户可以查看自己的用量统计" ON usage_metrics
-  FOR SELECT USING (user_id = auth.uid());
-
--- 创建函数: 检查用户是否超出对话限制
--- 使用 SECURITY DEFINER 以确保函数可以绕过 RLS 策略访问数据
+-- 修复 check_user_conversation_quota 函数，添加 SECURITY DEFINER
+-- 这样可以确保函数可以绕过 RLS 策略访问数据
 -- 修复：根据配额类型（全局或特定数智人）检查对应的使用量
 CREATE OR REPLACE FUNCTION check_user_conversation_quota(
   p_user_id UUID,
@@ -135,11 +64,16 @@ BEGIN
   END IF;
   
   -- 检查是否超额
-  RETURN v_current_count < v_quota;
+  -- 明确返回布尔值：如果使用量小于配额，返回true（允许）；否则返回false（禁止）
+  IF v_current_count < v_quota THEN
+    RETURN TRUE;
+  ELSE
+    RETURN FALSE;
+  END IF;
 END;
 $$;
 
--- 创建函数: 原子操作 - 检查配额并记录使用量（最简单直接的方法）
+-- 创建原子操作函数：检查配额并记录使用量（最简单直接的方法）
 -- 在一个事务中完成检查和记录，避免竞态条件
 CREATE OR REPLACE FUNCTION check_and_record_conversation_usage(
   p_user_id UUID,
@@ -214,57 +148,23 @@ BEGIN
     RETURN TRUE;
   END IF;
   
-  -- 检查当前使用量（兼容不同周期格式）
+  -- 检查当前使用量
   IF v_quota_bot_id IS NULL THEN
     -- 全局配额：计算所有数智人的使用量总和
-    -- 策略：查询所有数智人的记录，找出本月的记录并汇总
-    WITH current_month_bots AS (
-      SELECT DISTINCT ON (bot_id) bot_id, conversation_count
-      FROM usage_metrics
-      WHERE user_id = p_user_id 
-        AND bot_id IS NOT NULL
-        AND updated_at >= date_trunc('month', CURRENT_DATE)
-        AND updated_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
-      ORDER BY bot_id, updated_at DESC
-    )
     SELECT COALESCE(SUM(conversation_count), 0) INTO v_current_count
-    FROM current_month_bots;
-    
-    -- 如果没有找到本月记录，尝试使用当前周期的记录（兼容性处理）
-    IF v_current_count = 0 THEN
-      SELECT COALESCE(SUM(conversation_count), 0) INTO v_current_count
-      FROM usage_metrics
-      WHERE user_id = p_user_id 
-        AND bot_id IS NOT NULL
-        AND period_start = v_current_month_start
-        AND period_end = v_current_month_end;
-    END IF;
+    FROM usage_metrics
+    WHERE user_id = p_user_id 
+      AND bot_id IS NOT NULL
+      AND period_start = v_current_month_start
+      AND period_end = v_current_month_end;
   ELSE
     -- 特定数智人配额：只检查该数智人的使用量
-    -- 策略：优先查找本月的记录
-    SELECT conversation_count INTO v_current_count
+    SELECT COALESCE(conversation_count, 0) INTO v_current_count
     FROM usage_metrics
     WHERE user_id = p_user_id 
       AND bot_id = p_bot_id
-      AND updated_at >= date_trunc('month', CURRENT_DATE)
-      AND updated_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
-    ORDER BY updated_at DESC
-    LIMIT 1;
-    
-    -- 如果没有找到本月记录，尝试使用当前周期的记录（兼容性处理）
-    IF v_current_count IS NULL THEN
-      SELECT COALESCE(conversation_count, 0) INTO v_current_count
-      FROM usage_metrics
-      WHERE user_id = p_user_id 
-        AND bot_id = p_bot_id
-        AND period_start = v_current_month_start
-        AND period_end = v_current_month_end;
-    END IF;
-    
-    -- 如果还是没有找到，表示当前使用量为0
-    IF v_current_count IS NULL THEN
-      v_current_count := 0;
-    END IF;
+      AND period_start = v_current_month_start
+      AND period_end = v_current_month_end;
   END IF;
   
   -- 检查是否允许（使用量必须小于配额）
@@ -280,8 +180,7 @@ BEGIN
       conversation_count = usage_metrics.conversation_count + 1,
       updated_at = NOW();
     
-    -- 更新全局统计（重新计算所有数智人的总和）
-    -- 注意：使用 CTE 确保能读取到刚插入的数据
+    -- 更新全局统计（使用 CTE 确保能读取到刚插入的数据）
     WITH bot_totals AS (
       SELECT COALESCE(SUM(conversation_count), 0) as total_conversations
       FROM usage_metrics
@@ -313,4 +212,4 @@ BEGIN
   
   RETURN v_allowed;
 END;
-$$; 
+$$;

@@ -208,7 +208,7 @@
               <!-- Prompt Selector -->
               <div class="mt-3 pt-3 border-t border-gray-200">
                 <div class="flex gap-2 items-center">
-                  <label class="text-sm text-gray-600 font-medium whitespace-nowrap">预设提示词：</label>
+                  <label class="text-sm text-gray-600 font-medium whitespace-nowrap">预设范例：</label>
                   <select 
                     class="flex-1 border rounded-lg px-3 py-2 bg-white focus:ring-2 
                            focus:ring-blue-500 focus:border-transparent outline-none
@@ -216,7 +216,7 @@
                     v-model="selectedPromptId"
                     @change="handlePromptSelect"
                   >
-                    <option value="">请选择提示词...</option>
+                    <option value="">请选择范例...</option>
                     <option v-for="prompt in prompts" :key="prompt.id" :value="prompt.id">
                       {{ prompt.title }}
                     </option>
@@ -225,7 +225,7 @@
                     class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
                            transition-colors flex items-center gap-1 text-sm"
                     @click="showPromptDialog = true"
-                    title="管理提示词"
+                    title="管理范例"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -279,14 +279,14 @@
         </div>
       </div>
 
-      <!-- 提示词管理对话框 -->
+      <!-- 范例管理对话框 -->
       <div v-if="showPromptDialog" 
            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
            @click="showPromptDialog = false">
         <div class="bg-white rounded-lg w-[700px] max-h-[80vh] flex flex-col" 
              @click.stop>
           <div class="p-4 border-b flex justify-between items-center">
-            <h3 class="text-lg font-medium">提示词管理</h3>
+            <h3 class="text-lg font-medium">范例管理</h3>
             <button class="text-gray-500 hover:text-gray-700" @click="showPromptDialog = false">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -295,10 +295,10 @@
           </div>
           
           <div class="p-6 overflow-y-auto flex-1">
-            <!-- 添加/编辑提示词表单 -->
+            <!-- 添加/编辑范例表单 -->
             <div class="mb-6 p-4 bg-gray-50 rounded-lg">
               <h4 class="text-sm font-medium mb-3 text-gray-700">
-                {{ editingPrompt ? '编辑提示词' : '添加新提示词' }}
+                {{ editingPrompt ? '编辑范例' : '添加新范例' }}
               </h4>
               <div class="space-y-3">
                 <div>
@@ -308,7 +308,7 @@
                     v-model="promptForm.title"
                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 
                            focus:border-transparent outline-none text-sm"
-                    placeholder="输入提示词标题"
+                    placeholder="输入范例标题"
                   />
                 </div>
                 <div>
@@ -318,7 +318,7 @@
                     rows="4"
                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 
                            focus:border-transparent outline-none text-sm"
-                    placeholder="输入提示词内容"
+                    placeholder="输入范例内容"
                   ></textarea>
                 </div>
                 <div class="flex items-center gap-4">
@@ -352,9 +352,9 @@
               </div>
             </div>
 
-            <!-- 提示词列表 -->
+            <!-- 范例列表 -->
             <div>
-              <h4 class="text-sm font-medium mb-3 text-gray-700">提示词列表</h4>
+              <h4 class="text-sm font-medium mb-3 text-gray-700">范例列表</h4>
               <div class="space-y-2">
                 <div 
                   v-for="prompt in prompts" 
@@ -396,7 +396,7 @@
                       <button 
                         class="p-1.5 text-green-500 hover:bg-green-50 rounded transition-colors"
                         @click="usePrompt(prompt)"
-                        title="使用此提示词"
+                        title="使用此范例"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -407,7 +407,7 @@
                   </div>
                 </div>
                 <div v-if="prompts.length === 0" class="text-center py-8 text-gray-400 text-sm">
-                  暂无提示词，点击上方"添加新提示词"创建第一个提示词
+                  暂无范例，点击上方"添加新范例"创建第一个范例
                 </div>
               </div>
             </div>
@@ -569,7 +569,7 @@ const isAdmin = computed(() => userStore.isAdmin())
 const inputMessage = ref('')
 const selectedBot = ref('')
 
-// 提示词相关
+// 范例相关
 const prompts = ref<any[]>([])
 const selectedPromptId = ref('')
 const showPromptDialog = ref(false)
@@ -821,7 +821,38 @@ const handleSend = async () => {
     const apiKey = botData.api_key;
     
     console.log(`发送消息，使用ID: ${botIdToUse}, API Key: ${apiKey.substring(0, 8)}...`)
-    await chatStore.sendMessageWithBot(message, botIdToUse, apiKey)
+    const result = await chatStore.sendMessageWithBot(message, botIdToUse, apiKey)
+    
+    // 检查返回值，如果返回null说明被阻止了（比如配额超限）
+    if (result === null) {
+      // 如果返回null，说明消息发送被阻止（配额检查失败或其他原因）
+      const errorMessage = chatStore.error || '消息发送被阻止，请稍后重试'
+      console.error('发送消息被阻止:', errorMessage, 'result:', result, 'chatStore.error:', chatStore.error)
+      alert(errorMessage)
+      
+      // 如果消息已经被添加到消息列表（不应该发生，但为了安全起见），移除它们
+      if (chatStore.messages.length > 0) {
+        const lastMessage = chatStore.messages[chatStore.messages.length - 1]
+        if (lastMessage && lastMessage.role === 'user' && lastMessage.content === message) {
+          chatStore.messages.pop()
+        }
+        // 如果还有助手消息占位符，也移除
+        if (chatStore.messages.length > 0) {
+          const lastMsg = chatStore.messages[chatStore.messages.length - 1]
+          if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+            chatStore.messages.pop()
+          }
+        }
+      }
+      return
+    }
+    
+    // 检查是否有错误（配额检查失败等情况）
+    if (chatStore.error) {
+      console.error('发送消息失败:', chatStore.error)
+      alert(chatStore.error)
+      return
+    }
     
     // 保存到本地历史记录
     const response = chatStore.messages[chatStore.messages.length - 1]?.content || ''
@@ -900,9 +931,9 @@ const handleBotChange = async () => {
       })
   }
   
-  // 加载新数智人的提示词
+  // 加载新数智人的范例
   await loadPrompts()
-  selectedPromptId.value = '' // 清除提示词选择
+  selectedPromptId.value = '' // 清除范例选择
   
   // 尝试恢复该数智人的最近一次对话
   const botHistory = getBotChatHistory(selectedBot.value)
@@ -999,7 +1030,7 @@ watch(() => streamingMessage.value?.content, (newContent) => {
   console.log('流式消息内容更新:', newContent)
 }, { immediate: true })
 
-// 加载提示词列表
+// 加载范例列表
 const loadPrompts = async () => {
   try {
     // 获取当前选中数智人的数据库ID
@@ -1019,17 +1050,17 @@ const loadPrompts = async () => {
     const { data, error } = await promptService.getPrompts(botDbId || undefined, true)
     
     if (error) {
-      console.error('加载提示词列表失败:', error)
+      console.error('加载范例列表失败:', error)
       return
     }
     
     prompts.value = data || []
   } catch (error) {
-    console.error('加载提示词列表出错:', error)
+    console.error('加载范例列表出错:', error)
   }
 }
 
-// 选择提示词
+// 选择范例
 const handlePromptSelect = () => {
   if (!selectedPromptId.value) return
   
@@ -1039,14 +1070,14 @@ const handlePromptSelect = () => {
   }
 }
 
-// 使用提示词
+// 使用范例
 const usePrompt = (prompt: any) => {
   inputMessage.value = prompt.content
   selectedPromptId.value = prompt.id || ''
   showPromptDialog.value = false
 }
 
-// 编辑提示词
+// 编辑范例
 const editPrompt = (prompt: any) => {
   editingPrompt.value = prompt
   promptForm.value = {
@@ -1066,7 +1097,7 @@ const cancelEditPrompt = () => {
   }
 }
 
-// 保存提示词
+// 保存范例
 const savePrompt = async () => {
   if (!promptForm.value.title || !promptForm.value.content) {
     alert('请填写标题和内容')
@@ -1089,7 +1120,7 @@ const savePrompt = async () => {
     }
     
     if (editingPrompt.value) {
-      // 更新提示词
+      // 更新范例
       const { error } = await promptService.updatePrompt(editingPrompt.value.id, {
         title: promptForm.value.title,
         content: promptForm.value.content,
@@ -1098,11 +1129,11 @@ const savePrompt = async () => {
       })
       
       if (error) {
-        alert('更新提示词失败: ' + (error.message || '未知错误'))
+        alert('更新范例失败: ' + (error.message || '未知错误'))
         return
       }
     } else {
-      // 创建新提示词
+      // 创建新范例
       const { error } = await promptService.createPrompt({
         title: promptForm.value.title,
         content: promptForm.value.content,
@@ -1111,25 +1142,25 @@ const savePrompt = async () => {
       })
       
       if (error) {
-        alert('创建提示词失败: ' + (error.message || '未知错误'))
+        alert('创建范例失败: ' + (error.message || '未知错误'))
         return
       }
     }
     
-    // 重新加载提示词列表
+    // 重新加载范例列表
     await loadPrompts()
     
     // 重置表单
     cancelEditPrompt()
   } catch (error: any) {
-    console.error('保存提示词失败:', error)
-    alert('保存提示词失败: ' + (error.message || '未知错误'))
+    console.error('保存范例失败:', error)
+    alert('保存范例失败: ' + (error.message || '未知错误'))
   }
 }
 
-// 删除提示词
+// 删除范例
 const deletePrompt = async (id: string) => {
-  if (!confirm('确定要删除这条提示词吗？')) {
+  if (!confirm('确定要删除这条范例吗？')) {
     return
   }
   
@@ -1137,20 +1168,20 @@ const deletePrompt = async (id: string) => {
     const { error } = await promptService.deletePrompt(id)
     
     if (error) {
-      alert('删除提示词失败: ' + (error.message || '未知错误'))
+      alert('删除范例失败: ' + (error.message || '未知错误'))
       return
     }
     
-    // 重新加载提示词列表
+    // 重新加载范例列表
     await loadPrompts()
     
-    // 如果删除的是当前选中的提示词，清除选择
+    // 如果删除的是当前选中的范例，清除选择
     if (selectedPromptId.value === id) {
       selectedPromptId.value = ''
     }
   } catch (error: any) {
-    console.error('删除提示词失败:', error)
-    alert('删除提示词失败: ' + (error.message || '未知错误'))
+    console.error('删除范例失败:', error)
+    alert('删除范例失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -1171,7 +1202,7 @@ onMounted(async () => {
     chatStore.currentBotId = bot.id
     chatStore.currentApiKey = bot.apiKey
     
-    // 加载该数智人的提示词
+    // 加载该数智人的范例
     await loadPrompts()
     
     // 显示该数智人的历史记录
@@ -1183,10 +1214,10 @@ onMounted(async () => {
   }
 })
 
-// 监听数智人变化，加载对应的提示词
+// 监听数智人变化，加载对应的范例
 watch(() => selectedBot.value, async () => {
   await loadPrompts()
-  selectedPromptId.value = '' // 清除提示词选择
+  selectedPromptId.value = '' // 清除范例选择
 }, { immediate: false })
 
 // 添加对话框相关的状态和方法

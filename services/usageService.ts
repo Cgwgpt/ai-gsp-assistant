@@ -35,7 +35,20 @@ export const usageService = {
           .select('*')
           .eq('user_id', userId)
           .eq('bot_id', botId)
-          .single()
+          .maybeSingle() // 使用maybeSingle()避免406错误
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 是没有找到记录的错误
+          console.error('获取用户配额失败:', error)
+          return { 
+            data: { 
+              user_id: userId, 
+              bot_id: botId,
+              max_conversations: -1, 
+              max_tokens: -1 
+            } as UserQuota, 
+            error 
+          }
+        }
         
         if (data) {
           return { data, error: null }
@@ -48,7 +61,7 @@ export const usageService = {
         .select('*')
         .eq('user_id', userId)
         .is('bot_id', null)
-        .single()
+        .maybeSingle() // 使用maybeSingle()避免406错误
       
       if (error && error.code !== 'PGRST116') { // PGRST116 是没有找到记录的错误
         console.error('获取用户配额失败:', error)
@@ -243,34 +256,124 @@ export const usageService = {
     const { supabase } = useSupabase()
     
     try {
-      // 获取当前月份的起止日期
+      // 获取当前月份的起止日期（确保与数据库函数一致）
+      // 使用 date_trunc('month', CURRENT_DATE) 的逻辑：当月1日到当月最后一天
       const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      const year = now.getFullYear()
+      const month = now.getMonth() // 0-11
+      
+      // 当月第一天：YYYY-MM-01
+      const monthStart = new Date(year, month, 1)
+      // 当月最后一天：下个月第一天减1天
+      const monthEnd = new Date(year, month + 1, 0)
       
       const periodStart = monthStart.toISOString().split('T')[0]
       const periodEnd = monthEnd.toISOString().split('T')[0]
       
       console.log(`计算的周期: ${periodStart} 至 ${periodEnd}`)
       
+      // 注意：如果查询不到记录，尝试查询其他可能的周期（兼容性处理）
+      // 因为可能存在 period_start 为当月1日，period_end 为下月最后一天的情况
+      
       // 注意：Supabase客户端会自动处理headers，不需要手动添加
       // 如果遇到406错误，请确保API版本兼容
       
       // 如果是请求特定数智人的使用量
       if (botId) {
-        const { data, error } = await supabase
+        console.log(`[getUserUsage] 查询特定数智人使用量: userId=${userId}, botId=${botId}, period=${periodStart} 至 ${periodEnd}`)
+        
+        // 策略：优先查找最新的本月记录（兼容不同周期格式）
+        // 1. 先查询该数智人的所有本月记录，找出最新的
+        const currentYear = now.getFullYear()
+        const currentMonth = now.getMonth()
+        
+        const { data: allRecords, error: allError } = await supabase
           .from('usage_metrics')
           .select('*')
           .eq('user_id', userId)
           .eq('bot_id', botId)
-          .eq('period_start', periodStart)
-          .eq('period_end', periodEnd)
-          .maybeSingle()
+          .order('updated_at', { ascending: false })
         
-        if (data) {
-          return { data, error: null }
+        if (allError) {
+          console.error(`[getUserUsage] ❌ 查询所有记录失败:`, allError)
         }
         
+        // 2. 找出最新的本月记录
+        let latestRecord = null
+        if (allRecords && allRecords.length > 0) {
+          // 筛选出本月的记录（通过 updated_at 判断）
+          const currentMonthRecords = allRecords.filter(record => {
+            const recordDate = new Date(record.updated_at)
+            return recordDate.getFullYear() === currentYear && 
+                   recordDate.getMonth() === currentMonth
+          })
+          
+          if (currentMonthRecords.length > 0) {
+            // 使用最新的记录
+            latestRecord = currentMonthRecords[0]
+            console.log(`[getUserUsage] ✅ 找到最新的本月记录:`, {
+              period_start: latestRecord.period_start,
+              period_end: latestRecord.period_end,
+              conversation_count: latestRecord.conversation_count,
+              updated_at: latestRecord.updated_at
+            })
+          } else {
+            // 如果没有本月记录，尝试查找当前周期的记录
+            const currentPeriodRecord = allRecords.find(record => 
+              record.period_start === periodStart && record.period_end === periodEnd
+            )
+            if (currentPeriodRecord) {
+              latestRecord = currentPeriodRecord
+              console.log(`[getUserUsage] ⚠️ 使用当前周期的记录（非本月更新）:`, {
+                period_start: latestRecord.period_start,
+                period_end: latestRecord.period_end,
+                conversation_count: latestRecord.conversation_count,
+                updated_at: latestRecord.updated_at
+              })
+            }
+          }
+        }
+        
+        if (latestRecord) {
+          console.log(`[getUserUsage] ✅ 返回使用量记录:`, {
+            bot_id: latestRecord.bot_id,
+            conversation_count: latestRecord.conversation_count,
+            token_count: latestRecord.token_count,
+            period_start: latestRecord.period_start,
+            period_end: latestRecord.period_end,
+            updated_at: latestRecord.updated_at
+          })
+          
+          // 如果token_count为0但有对话次数，可能是记录在不同周期，尝试查找其他周期的记录
+          if (latestRecord.token_count === 0 && latestRecord.conversation_count > 0) {
+            console.log(`[getUserUsage] ⚠️ 发现token_count为0但有对话次数，尝试查找其他周期的Token记录`)
+            
+            // 查找所有周期的记录，找出token_count不为0的记录
+            const recordsWithTokens = allRecords.filter(r => r.token_count > 0)
+            if (recordsWithTokens.length > 0) {
+              // 找出最新的有Token的记录
+              const latestWithTokens = recordsWithTokens[0]
+              console.log(`[getUserUsage] ✅ 找到有Token的记录，使用该记录的token_count:`, {
+                period_start: latestWithTokens.period_start,
+                period_end: latestWithTokens.period_end,
+                token_count: latestWithTokens.token_count
+              })
+              
+              // 合并数据：使用最新记录的conversation_count，但使用有Token记录的token_count
+              return { 
+                data: {
+                  ...latestRecord,
+                  token_count: latestWithTokens.token_count
+                }, 
+                error: null 
+              }
+            }
+          }
+          
+          return { data: latestRecord, error: null }
+        }
+        
+        console.log(`[getUserUsage] ⚠️ 未找到使用量记录，返回默认值0`)
         // 如果没有找到使用量记录，返回默认值
         return { 
           data: { 
@@ -285,9 +388,61 @@ export const usageService = {
         }
       }
       
-      // 获取用户的全局总体使用量 - 修改为计算所有数智人使用量总和
-      // 方法1：获取全局记录（如果存在全局记录）
-      const { data: globalData, error: globalError } = await supabase
+      // 获取用户的全局总体使用量 - 直接计算所有数智人使用量总和（最准确）
+      // 策略：查询所有数智人的本月记录，汇总使用量（兼容不同周期格式）
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+      
+      // 查询所有数智人的所有记录
+      const { data: allBotRecords, error: botError } = await supabase
+        .from('usage_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .not('bot_id', 'is', null)
+        .order('updated_at', { ascending: false })
+      
+      if (botError) {
+        console.error(`[getUserUsage] ❌ 查询所有数智人记录失败:`, botError)
+      }
+      
+      let totalConversations = 0
+      let totalTokens = 0
+      
+      // 筛选出本月的记录并汇总
+      if (allBotRecords && allBotRecords.length > 0) {
+        // 按 bot_id 分组，每个数智人只取最新的本月记录
+        const botMap = new Map<string, UsageMetric>()
+        
+        allBotRecords.forEach(record => {
+          const recordDate = new Date(record.updated_at)
+          const isCurrentMonth = recordDate.getFullYear() === currentYear && 
+                                 recordDate.getMonth() === currentMonth
+          
+          if (isCurrentMonth) {
+            const botId = record.bot_id!
+            // 如果该数智人还没有记录，或者当前记录更新，则使用当前记录
+            if (!botMap.has(botId) || 
+                new Date(record.updated_at) > new Date(botMap.get(botId)!.updated_at!)) {
+              botMap.set(botId, record)
+            }
+          }
+        })
+        
+        // 汇总所有数智人的使用量
+        botMap.forEach(record => {
+          totalConversations += record.conversation_count || 0
+          totalTokens += record.token_count || 0
+        })
+        
+        console.log(`[getUserUsage] ✅ 全局使用量计算:`, {
+          bot_count: botMap.size,
+          total_conversations: totalConversations,
+          total_tokens: totalTokens
+        })
+      }
+      
+      // 尝试更新全局记录（如果存在）
+      const { data: globalData } = await supabase
         .from('usage_metrics')
         .select('*')
         .eq('user_id', userId)
@@ -296,33 +451,11 @@ export const usageService = {
         .eq('period_end', periodEnd)
         .maybeSingle()
       
-      // 方法2：获取所有数智人记录并计算总和
-      const { data: botUsageData, error: botError } = await supabase
-        .from('usage_metrics')
-        .select('*')
-        .eq('user_id', userId)
-        .not('bot_id', 'is', null)
-        .eq('period_start', periodStart)
-        .eq('period_end', periodEnd)
-      
-      let totalConversations = 0
-      let totalTokens = 0
-      
-      // 计算所有数智人使用量总和
-      if (botUsageData && botUsageData.length > 0) {
-        totalConversations = botUsageData.reduce((sum: number, item: UsageMetric) => sum + (item.conversation_count || 0), 0)
-        totalTokens = botUsageData.reduce((sum: number, item: UsageMetric) => sum + (item.token_count || 0), 0)
-      }
-      
-      // 如果全局记录存在，则使用全局记录
       if (globalData) {
-        // 检查全局记录是否与所有数智人总和一致，如不一致则更新
-        if (botUsageData && botUsageData.length > 0 && 
-            (globalData.conversation_count !== totalConversations || 
-             globalData.token_count !== totalTokens)) {
-          console.log('发现全局使用量与各数智人总和不一致，更新全局记录')
-          
-          // 更新全局记录以匹配总和
+        // 如果全局记录与计算的总和不一致，更新它
+        if (globalData.conversation_count !== totalConversations || 
+            globalData.token_count !== totalTokens) {
+          console.log(`[getUserUsage] ⚠️ 全局记录不一致，更新中...`)
           await supabase
             .from('usage_metrics')
             .update({
@@ -331,22 +464,23 @@ export const usageService = {
               updated_at: new Date().toISOString()
             })
             .eq('id', globalData.id)
-          
-          // 返回更新后的数据
-          return { 
-            data: { 
-              ...globalData,
-              conversation_count: totalConversations,
-              token_count: totalTokens
-            }, 
-            error: null 
-          }
         }
-        
-        return { data: globalData, error: null }
+      } else {
+        // 如果全局记录不存在，创建它
+        console.log(`[getUserUsage] ⚠️ 全局记录不存在，创建中...`)
+        await supabase
+          .from('usage_metrics')
+          .insert([{
+            user_id: userId,
+            bot_id: null,
+            conversation_count: totalConversations,
+            token_count: totalTokens,
+            period_start: periodStart,
+            period_end: periodEnd
+          }])
       }
       
-      // 如果没有全局记录，则使用计算的总和
+      // 返回计算的总和（确保数据准确）
       return { 
         data: { 
           user_id: userId, 
@@ -763,7 +897,7 @@ export const usageService = {
             .eq('bot_id', botId)
             .eq('period_start', periodStart)
             .eq('period_end', periodEnd)
-            .single()
+            .maybeSingle() // 使用maybeSingle()避免406错误
           
           // 更新特定数智人的使用统计
           if (botMetrics.data) {
@@ -827,7 +961,7 @@ export const usageService = {
             .is('bot_id', null)
             .eq('period_start', periodStart)
             .eq('period_end', periodEnd)
-            .single()
+            .maybeSingle() // 使用maybeSingle()避免406错误
           
           // 更新全局使用统计
           if (globalMetrics.data) {
@@ -920,7 +1054,7 @@ export const usageService = {
             .eq('bot_id', botId)
             .eq('period_start', periodStart)
             .eq('period_end', periodEnd)
-            .single()
+            .maybeSingle() // 使用maybeSingle()避免406错误
           
           // 更新特定数智人的使用统计
           if (botMetrics.data) {
@@ -983,7 +1117,7 @@ export const usageService = {
             .is('bot_id', null)
             .eq('period_start', periodStart)
             .eq('period_end', periodEnd)
-            .single()
+            .maybeSingle() // 使用maybeSingle()避免406错误
           
           // 更新全局使用统计
           if (globalMetrics.data) {
@@ -1047,27 +1181,62 @@ export const usageService = {
     }
   },
   
-  // 检查用户是否超出对话次数限制
+  // 检查用户是否超出对话次数限制（原子操作：检查并记录）
+  // 最简单直接的方法：在一个数据库事务中完成检查和记录，避免竞态条件
   async checkConversationQuota(userId: string, botId: string) {
     const { supabase } = useSupabase()
     
     try {
-      // 直接调用数据库函数
+      console.log('[配额检查] ========== 开始检查并记录用户配额 ==========')
+      console.log('[配额检查] 参数:', { userId, botId })
+      
+      // 验证参数
+      if (!userId || !botId) {
+        console.error('[配额检查] 参数无效:', { userId, botId })
+        return { allowed: false, error: new Error('参数无效') }
+      }
+      
+      // 使用原子操作函数：检查配额并记录使用量（如果允许）
       const { data, error } = await supabase
-        .rpc('check_user_conversation_quota', {
+        .rpc('check_and_record_conversation_usage', {
           p_user_id: userId,
           p_bot_id: botId
         })
       
+      console.log('[配额检查] RPC调用结果:', { 
+        data, 
+        error, 
+        dataType: typeof data,
+        dataValue: data,
+        errorCode: error?.code,
+        errorMessage: error?.message
+      })
+      
+      // 如果RPC调用有错误，严格禁止
       if (error) {
-        console.error('检查用户对话配额失败:', error)
-        return { allowed: true, error } // 默认允许
+        console.error('[配额检查] ❌ RPC调用失败，禁止发送消息')
+        console.error('[配额检查] 错误详情:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        })
+        return { allowed: false, error }
       }
       
-      return { allowed: data, error: null }
+      // 严格检查返回值：只有 data === true 才允许
+      const allowed = data === true
+      
+      if (!allowed) {
+        console.warn('[配额检查] ❌ 配额检查未通过，禁止发送消息（已超过配额限制）')
+      } else {
+        console.log('[配额检查] ✅ 配额检查通过，已记录使用量，允许发送消息')
+      }
+      
+      return { allowed, error: null }
     } catch (err) {
-      console.error('检查用户对话配额出错:', err)
-      return { allowed: true, error: err } // 默认允许
+      console.error('[配额检查] ❌ 检查用户对话配额异常:', err)
+      return { allowed: false, error: err }
     }
   },
   

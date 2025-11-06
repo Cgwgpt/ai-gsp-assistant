@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { chatService } from '../services/chatService'
+import { chatService } from '@/services/chatService'
 import { botService } from '../services/botService'
 import { conversationService } from '../services/conversationService'
 import { usageService } from '../services/usageService'
@@ -36,33 +36,73 @@ export const useChatStore = defineStore('chat', {
       this.currentAssistantMessage = ''
       
       try {
-        // 检查是否有创建新对话的权限
-        if (!this.conversationId) {
-          const { user } = useSupabase()
-          if (user.value) {
-            // 获取数智人信息
-            let botDbId = ''
-            const { data: bots } = await botService.getBots()
-            if (bots) {
-              // 使用当前的this.currentBotId（已确保是coze_bot_id）查找
-              const bot = bots.find(b => b.coze_bot_id === this.currentBotId)
-              if (bot && bot.id) {
-                botDbId = bot.id
-                
-                // 检查用户配额
-                const { allowed, error } = await usageService.checkConversationQuota(user.value.id, botDbId)
-                if (error) {
-                  console.error('检查用户对话配额失败:', error)
-                  // 继续执行，但记录错误
-                } else if (!allowed) {
-                  this.loading = false
-                  this.error = '您已达到本月对话次数限制，请联系管理员增加配额或等待下个月重置'
-                  return null
-                }
-              }
-            }
-          }
+        // ========== 配额检查（优先级最高，不能绕过） ==========
+        // 每次发送消息前都强制检查配额（无论是否已有对话）
+        const { user } = useSupabase()
+        
+        // 如果用户未登录，禁止发送消息
+        if (!user.value) {
+          this.loading = false
+          this.error = '用户未登录，无法发送消息'
+          return null
         }
+        
+        // 先设置当前的botId，确保后续逻辑使用正确的botId
+        this.currentBotId = botId
+        if (apiKey) {
+          this.currentApiKey = apiKey
+        }
+        
+        // 获取数智人信息（必须找到bot才能检查配额）
+        let botDbId = ''
+        const { data: bots } = await botService.getBots()
+        if (!bots || bots.length === 0) {
+          this.loading = false
+          this.error = '无法获取数智人信息，无法发送消息'
+          return null
+        }
+        
+        // 使用传入的botId参数（coze_bot_id）查找bot
+        const bot = bots.find(b => b.coze_bot_id === botId)
+        if (!bot || !bot.id) {
+          this.loading = false
+          this.error = '无法找到指定的数智人，无法发送消息'
+          console.error('找不到bot，botId:', botId, 'available bots:', bots.map(b => b.coze_bot_id))
+          return null
+        }
+        
+        botDbId = bot.id
+        
+        // 检查用户配额（优先级最高，超过限制则禁止对话）- 这是强制检查，不能绕过
+        console.log('[消息发送] 开始配额检查...')
+        const { allowed, error: quotaError } = await usageService.checkConversationQuota(user.value.id, botDbId)
+        console.log('[消息发送] 配额检查完成:', { allowed, quotaError, userId: user.value.id, botId: botDbId, cozeBotId: botId })
+        
+        // 严格检查：任何错误或不允许的情况，都立即阻止
+        if (quotaError) {
+          console.error('[消息发送] ❌ 配额检查失败，立即阻止消息发送')
+          console.error('[消息发送] 错误详情:', quotaError)
+          this.loading = false
+          this.error = '检查对话配额失败，无法发送消息，请稍后重试'
+          console.log('[消息发送] 已设置错误状态并返回null，错误信息:', this.error)
+          // 确保返回null，阻止后续执行
+          return null
+        }
+        
+        // 严格检查：只有 allowed === true 才允许继续
+        // 如果 allowed 是 false、null、undefined 或任何其他值，都禁止
+        if (allowed !== true) {
+          console.warn('[消息发送] ❌ 配额检查未通过，立即阻止消息发送')
+          console.warn('[消息发送] allowed值:', allowed, '类型:', typeof allowed, '是否为true:', allowed === true)
+          this.loading = false
+          this.error = '您已达到本月对话次数限制，请联系管理员增加配额或等待下个月重置'
+          console.log('[消息发送] 已设置错误状态并返回null，错误信息:', this.error)
+          // 确保返回null，阻止后续执行
+          return null
+        }
+        
+        console.log('[消息发送] ✅ 配额检查通过，允许继续发送消息')
+        // ========== 配额检查结束 ==========
 
         // 添加用户消息
         const userMessage: Message = {
@@ -296,6 +336,11 @@ export const useChatStore = defineStore('chat', {
       this.reset()
     },
     
+    // 设置数智人类型
+    setBotType(type: BotType) {
+      this.botType = type
+    },
+    
     // 重置聊天状态
     reset() {
       this.messages = []
@@ -392,30 +437,69 @@ export const useGspChatStore = defineStore('gspChat', {
       this.currentAssistantMessage = ''
       
       try {
-        // 检查是否有创建新对话的权限
-        if (!this.conversationId) {
-          const { user } = useSupabase()
-          if (user.value) {
-            // 使用环境变量中的GSP专用数智人ID获取数智人ID
-            const botCozeId = import.meta.env.VITE_GSP_BOT_ID || import.meta.env.VITE_COZE_BOT_ID
-            const { data: bots } = await botService.getBots()
-            if (bots && botCozeId) {
-              const bot = bots.find(b => b.coze_bot_id === botCozeId)
-              if (bot && bot.id) {
-                // 检查用户配额
-                const { allowed, error } = await usageService.checkConversationQuota(user.value.id, bot.id)
-                if (error) {
-                  console.error('检查用户对话配额失败:', error)
-                  // 继续执行，但记录错误
-                } else if (!allowed) {
-                  this.loading = false
-                  this.error = '您已达到本月对话次数限制，请联系管理员增加配额或等待下个月重置'
-                  return null
-                }
-              }
-            }
-          }
+        // 每次发送消息前都强制检查配额（无论是否已有对话）- 优先级最高，不能绕过
+        const { user } = useSupabase()
+        
+        // 如果用户未登录，禁止发送消息
+        if (!user.value) {
+          this.loading = false
+          this.error = '用户未登录，无法发送消息'
+          return null
         }
+        
+        // 使用环境变量中的GSP专用数智人ID获取数智人ID
+        const botCozeId = import.meta.env.VITE_GSP_BOT_ID || import.meta.env.VITE_COZE_BOT_ID
+        if (!botCozeId) {
+          this.loading = false
+          this.error = '无法获取数智人ID，无法发送消息'
+          return null
+        }
+        
+        // 获取数智人信息（必须找到bot才能检查配额）
+        const { data: bots } = await botService.getBots()
+        if (!bots || bots.length === 0) {
+          this.loading = false
+          this.error = '无法获取数智人信息，无法发送消息'
+          return null
+        }
+        
+        const bot = bots.find(b => b.coze_bot_id === botCozeId)
+        if (!bot || !bot.id) {
+          this.loading = false
+          this.error = '无法找到指定的数智人，无法发送消息'
+          return null
+        }
+        
+        // 检查用户配额（优先级最高，超过限制则禁止对话）- 这是强制检查，不能绕过
+        console.log('[GSP消息发送] 开始配额检查...')
+        const { allowed, error: quotaError } = await usageService.checkConversationQuota(user.value.id, bot.id)
+        console.log('[GSP消息发送] 配额检查完成:', { allowed, quotaError, userId: user.value.id, botId: bot.id, cozeBotId: botCozeId })
+        
+        // 严格检查：任何错误或不允许的情况，都立即阻止
+        if (quotaError) {
+          console.error('[GSP消息发送] ❌ 配额检查失败，立即阻止消息发送')
+          console.error('[GSP消息发送] 错误详情:', quotaError)
+          this.loading = false
+          this.error = '检查对话配额失败，无法发送消息，请稍后重试'
+          console.log('[GSP消息发送] 已设置错误状态并返回null，错误信息:', this.error)
+          // 确保返回null，阻止后续执行
+          return null
+        }
+        
+        // 严格检查：只有 allowed === true 才允许继续
+        // 如果 allowed 是 false、null、undefined 或任何其他值，都禁止
+        if (allowed !== true) {
+          console.warn('[GSP消息发送] ❌ 配额检查未通过，立即阻止消息发送')
+          console.warn('[GSP消息发送] allowed值:', allowed, '类型:', typeof allowed, '是否为true:', allowed === true)
+          this.loading = false
+          this.error = '您已达到本月对话次数限制，请联系管理员增加配额或等待下个月重置'
+          console.log('[GSP消息发送] 已设置错误状态并返回null，错误信息:', this.error)
+          // 确保返回null，阻止后续执行
+          return null
+        }
+        
+        console.log('[GSP消息发送] ✅ 配额检查通过，允许继续发送消息')
+        // ========== 配额检查结束 ==========
         
         // 添加用户消息
         this.messages.push({

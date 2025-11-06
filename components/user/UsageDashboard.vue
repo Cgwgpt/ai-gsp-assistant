@@ -176,7 +176,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { usageService } from '../../services/usageService'
 import { useSupabase } from '../../composables/useSupabase'
 import { botService } from '../../services/botService'
@@ -185,8 +185,6 @@ const { user } = useSupabase()
 const isLoading = ref(true)
 const globalUsage = ref(null)
 const botUsages = ref([])
-const refreshInterval = ref(null)
-const lastUpdated = ref(null)
 
 // 格式化时间显示
 const formatTime = (date) => {
@@ -216,8 +214,10 @@ const forceRefresh = async () => {
 
 // 常规刷新数据
 const refreshData = async () => {
-  console.log('刷新数据...')
+  console.log('[使用统计] ========== 开始刷新数据 ==========')
+  console.log('[使用统计] 刷新时间:', new Date().toISOString())
   await loadUserUsage()
+  console.log('[使用统计] ========== 刷新数据完成 ==========')
 }
 
 // 加载用户的使用情况
@@ -241,7 +241,8 @@ const loadUserUsage = async (force = false) => {
     
     if (globalData) {
       globalUsage.value = globalData
-      console.log('全局使用情况:', globalData)
+      console.log('[使用统计] 全局使用情况:', globalData)
+      console.log('[使用统计] 对话次数:', globalData.usage?.conversation_count, '/', globalData.quota?.max_conversations)
     } else {
       console.warn('没有获取到全局使用情况数据，使用示例数据')
       // 使用示例数据
@@ -386,19 +387,10 @@ const getExampleBotUsages = () => {
   }))
 }
 
+// 只在页面打开时加载一次数据
 onMounted(async () => {
   if (user.value) {
     await loadUserUsage()
-    
-    // 设置自动刷新间隔，每30秒刷新一次
-    refreshInterval.value = setInterval(refreshData, 30000)
-  }
-})
-
-onUnmounted(() => {
-  // 在组件卸载时清除定时器
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
   }
 })
 </script>

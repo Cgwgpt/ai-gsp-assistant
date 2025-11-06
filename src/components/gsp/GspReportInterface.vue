@@ -436,7 +436,39 @@ const handleSend = async () => {
   inputMessage.value = ''
   
   try {
-    await chatStore.sendMessage(message)
+    const result = await chatStore.sendMessage(message)
+    
+    // 检查返回值，如果返回null说明被阻止了（比如配额超限）
+    if (result === null) {
+      // 如果返回null，说明消息发送被阻止（配额检查失败或其他原因）
+      const errorMessage = chatStore.error || '消息发送被阻止，请稍后重试'
+      console.error('发送消息被阻止:', errorMessage, 'result:', result, 'chatStore.error:', chatStore.error)
+      alert(errorMessage)
+      
+      // 如果消息已经被添加到消息列表（不应该发生，但为了安全起见），移除它们
+      if (chatStore.messages.length > 0) {
+        const lastMessage = chatStore.messages[chatStore.messages.length - 1]
+        if (lastMessage && lastMessage.role === 'user' && lastMessage.content === message) {
+          chatStore.messages.pop()
+        }
+        // 如果还有助手消息占位符，也移除
+        if (chatStore.messages.length > 0) {
+          const lastMsg = chatStore.messages[chatStore.messages.length - 1]
+          if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+            chatStore.messages.pop()
+          }
+        }
+      }
+      return
+    }
+    
+    // 检查是否有错误（配额检查失败等情况）
+    if (chatStore.error) {
+      console.error('发送消息失败:', chatStore.error)
+      alert(chatStore.error)
+      return
+    }
+    
     // 保存到本地史记录
     const response = chatStore.messages[chatStore.messages.length - 1]?.content || ''
     saveLocalChatHistory(message, response)

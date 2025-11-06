@@ -12,7 +12,7 @@ export interface Prompt {
 }
 
 export const promptService = {
-  // 获取提示词列表
+  // 获取范例列表
   async getPrompts(botId?: string, includePublic = true) {
     const { supabase, user } = useSupabase()
     
@@ -28,15 +28,15 @@ export const promptService = {
       // 如果用户已登录
       if (user.value) {
         if (includePublic) {
-          // 用户可以看到自己的提示词和公开的提示词
+          // 用户可以看到自己的范例和公开的范例
           userOrConditions.push(`user_id.eq.${user.value.id}`)
           userOrConditions.push('is_public.eq.true')
         } else {
-          // 只看自己的提示词
+          // 只看自己的范例
           query = query.eq('user_id', user.value.id)
         }
       } else if (includePublic) {
-        // 未登录用户只能看公开的提示词
+        // 未登录用户只能看公开的范例
         query = query.eq('is_public', true)
       }
       
@@ -45,12 +45,12 @@ export const promptService = {
         query = query.or(userOrConditions.join(','))
       }
       
-      // 如果指定了数智人ID，筛选该数智人的提示词（包括null，即通用的提示词）
+      // 如果指定了数智人ID，筛选该数智人的范例（包括null，即通用的范例）
       // 注意：这里需要与前面的条件组合，使用AND逻辑
       if (botId) {
-        // 先过滤出有权限查看的提示词，然后再筛选数智人
+        // 先过滤出有权限查看的范例，然后再筛选数智人
         // 由于Supabase的限制，我们需要在客户端过滤或使用更复杂的查询
-        // 这里先获取所有有权限的提示词，然后在客户端过滤数智人
+        // 这里先获取所有有权限的范例，然后在客户端过滤数智人
         // 或者使用更精细的查询逻辑
         const { data: allPrompts, error: queryError } = await query
         
@@ -58,7 +58,7 @@ export const promptService = {
           return { data: [], error: queryError }
         }
         
-        // 在客户端过滤：属于该数智人或通用的提示词（bot_id为null）
+        // 在客户端过滤：属于该数智人或通用的范例（bot_id为null）
         const filteredPrompts = (allPrompts || []).filter((p: any) => 
           !p.bot_id || p.bot_id === botId
         )
@@ -69,18 +69,18 @@ export const promptService = {
       const { data, error } = await query
       
       if (error) {
-        console.error('获取提示词列表失败:', error)
+        console.error('获取范例列表失败:', error)
         return { data: [], error }
       }
       
       return { data: data || [], error: null }
     } catch (err) {
-      console.error('获取提示词列表出错:', err)
+      console.error('获取范例列表出错:', err)
       return { data: [], error: err }
     }
   },
   
-  // 获取单条提示词
+  // 获取单条范例
   async getPrompt(id: string) {
     const { supabase } = useSupabase()
     
@@ -92,18 +92,18 @@ export const promptService = {
         .single()
       
       if (error) {
-        console.error('获取提示词失败:', error)
+        console.error('获取范例失败:', error)
         return { data: null, error }
       }
       
       return { data, error: null }
     } catch (err) {
-      console.error('获取提示词出错:', err)
+      console.error('获取范例出错:', err)
       return { data: null, error: err }
     }
   },
   
-  // 创建提示词
+  // 创建范例
   async createPrompt(promptData: Prompt) {
     const { supabase, user } = useSupabase()
     
@@ -127,18 +127,18 @@ export const promptService = {
         .single()
       
       if (error) {
-        console.error('创建提示词失败:', error)
+        console.error('创建范例失败:', error)
         return { data: null, error }
       }
       
       return { data, error: null }
     } catch (err) {
-      console.error('创建提示词出错:', err)
+      console.error('创建范例出错:', err)
       return { data: null, error: err }
     }
   },
   
-  // 更新提示词
+  // 更新范例
   async updatePrompt(id: string, promptData: Partial<Prompt>) {
     const { supabase } = useSupabase()
     
@@ -165,18 +165,18 @@ export const promptService = {
         .single()
       
       if (error) {
-        console.error('更新提示词失败:', error)
+        console.error('更新范例失败:', error)
         return { data: null, error }
       }
       
       return { data, error: null }
     } catch (err) {
-      console.error('更新提示词出错:', err)
+      console.error('更新范例出错:', err)
       return { data: null, error: err }
     }
   },
   
-  // 删除提示词
+  // 删除范例
   async deletePrompt(id: string) {
     const { supabase } = useSupabase()
     
@@ -187,13 +187,13 @@ export const promptService = {
         .eq('id', id)
       
       if (error) {
-        console.error('删除提示词失败:', error)
+        console.error('删除范例失败:', error)
         return { error }
       }
       
       return { error: null }
     } catch (err) {
-      console.error('删除提示词出错:', err)
+      console.error('删除范例出错:', err)
       return { error: err }
     }
   }
